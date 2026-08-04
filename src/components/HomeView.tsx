@@ -546,6 +546,7 @@ export const HomeView: React.FC = () => {
                   <button onClick={() => setView(currentUser.isGuest ? "auth" : "dashboard")} className="hover:text-neon-blue transition-colors">My Order History</button>
                 )}
               </li>
+              <li><a href="/admin.html" className="text-white/20 hover:text-neon-purple transition-colors text-[10px] lowercase font-mono">admin login</a></li>
               <li><button onClick={() => setView("faq")} className="hover:text-neon-blue transition-colors">General FAQs</button></li>
               <li><button onClick={() => setView("faq")} className="hover:text-neon-blue transition-colors">Technical Warranties</button></li>
             </ul>
