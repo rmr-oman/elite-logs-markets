@@ -36,11 +36,7 @@ export const Navbar: React.FC = () => {
   ];
 
   if (!currentUser.isGuest) {
-    if (currentUser.isAdmin) {
-      navItems.push({ label: "Admin Dashboard", view: "admin" });
-    } else {
-      navItems.push({ label: "Dashboard", view: "dashboard" });
-    }
+    navItems.push({ label: "Dashboard", view: "dashboard" });
   }
 
   navItems.push({ label: "FAQ & Support", view: "faq" });
@@ -113,18 +109,14 @@ export const Navbar: React.FC = () => {
 
           {/* Admin Panel Button - Only visible when logged in as administrator */}
           {currentUser.isAdmin && (
-            <button
-              onClick={() => setView("admin")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold uppercase transition-all border ${
-                activeView === "admin"
-                  ? "bg-neon-purple border-neon-purple text-black font-black shadow-[0_0_12px_rgba(255,0,255,0.4)]"
-                  : "bg-neon-purple/10 border-neon-purple/30 text-neon-purple hover:bg-neon-purple hover:text-black hover:border-neon-purple shadow-[0_0_8px_rgba(255,0,255,0.15)]"
-              }`}
-              title="Open Admin Panel"
+            <a
+              href="/admin.html"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold uppercase transition-all border bg-neon-purple/10 border-neon-purple/30 text-neon-purple hover:bg-neon-purple hover:text-black hover:border-neon-purple shadow-[0_0_8px_rgba(255,0,255,0.15)] cursor-pointer select-none"
+              title="Open Admin Master Panel"
             >
               <ShieldAlert className="h-3.5 w-3.5" />
               <span>Admin Panel</span>
-            </button>
+            </a>
           )}
 
           {/* Shopping Cart Button */}

@@ -429,6 +429,26 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  if (!currentUser || currentUser.isGuest || !currentUser.isAdmin) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16 space-y-6" id="admin-restricted-view">
+        <div className="inline-flex p-4 rounded-full bg-red-500/10 border border-red-500/30 text-red-500">
+          <ShieldAlert className="h-10 w-10 animate-pulse" />
+        </div>
+        <h2 className="text-xl font-black uppercase tracking-wider italic text-white">Admin Access Restricted</h2>
+        <p className="text-xs text-white/50 max-w-sm mx-auto leading-relaxed">
+          You do not have administrative privileges. Please log in with an administrator account to access the Master Control Desk.
+        </p>
+        <button
+          onClick={() => setView("home")}
+          className="px-6 py-2.5 bg-neon-purple hover:bg-neon-purple/90 text-black font-black uppercase text-xs tracking-widest rounded-sm cursor-pointer select-none"
+        >
+          Return to Marketplace
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-12 pb-20">
       

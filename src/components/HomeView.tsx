@@ -539,7 +539,13 @@ export const HomeView: React.FC = () => {
             <h5 className="text-white font-black uppercase tracking-widest text-xs mb-6">Quick Actions</h5>
             <ul className="space-y-3 text-xs text-white/50 font-bold uppercase tracking-wide">
               <li><button onClick={() => setView("shop")} className="hover:text-neon-blue transition-colors">Browse Marketplace</button></li>
-              <li><button onClick={() => setView(currentUser.isGuest ? "auth" : currentUser.isAdmin ? "admin" : "dashboard")} className="hover:text-neon-blue transition-colors">{currentUser.isAdmin ? "Admin Console" : "My Order History"}</button></li>
+              <li>
+                {currentUser.isAdmin ? (
+                  <a href="/admin.html" className="hover:text-neon-purple transition-colors">Admin Console</a>
+                ) : (
+                  <button onClick={() => setView(currentUser.isGuest ? "auth" : "dashboard")} className="hover:text-neon-blue transition-colors">My Order History</button>
+                )}
+              </li>
               <li><button onClick={() => setView("faq")} className="hover:text-neon-blue transition-colors">General FAQs</button></li>
               <li><button onClick={() => setView("faq")} className="hover:text-neon-blue transition-colors">Technical Warranties</button></li>
             </ul>

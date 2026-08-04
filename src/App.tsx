@@ -14,7 +14,13 @@ import { AuthView } from "./components/AuthView";
 import { SupportChat } from "./components/SupportChat";
 
 export default function App() {
-  const { activeView } = useAppState();
+  const { activeView, currentUser, setView } = useAppState();
+
+  React.useEffect(() => {
+    if (activeView === "admin") {
+      window.location.href = "/admin.html";
+    }
+  }, [activeView]);
 
   const renderActiveView = () => {
     switch (activeView) {
@@ -34,8 +40,6 @@ export default function App() {
         return <TrackingView />;
       case "faq":
         return <FAQView />;
-      case "admin":
-        return <AdminPanel />;
       case "auth":
         return <AuthView />;
       default:

@@ -123,12 +123,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [coupons] = useState<Coupon[]>(INITIAL_COUPONS);
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const local = localStorage.getItem("elite_logs_user");
-    return local ? JSON.parse(local) : {
-      email: "rahatislamroman@gmail.com",
-      username: "rahatroman",
-      walletBalance: 150.00,
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch (e) {
+        console.warn("Invalid cached user in localStorage:", e);
+      }
+    }
+    return {
+      email: "",
+      username: "Guest",
+      walletBalance: 0.00,
       isAdmin: false,
-      referralCode: "ELITE-998A"
+      referralCode: "",
+      isGuest: true
     };
   });
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
@@ -136,7 +145,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const local = localStorage.getItem("elite_logs_cart");
     return local ? JSON.parse(local) : [];
   });
-  const [activeView, setView] = useState<string>("home");
+  const [activeView, setActiveViewRaw] = useState<string>("home");
+
+  const setView = (view: string) => {
+    if (view === "admin" && (!currentUser || currentUser.isGuest || !currentUser.isAdmin)) {
+      setActiveViewRaw("auth");
+      return;
+    }
+    setActiveViewRaw(view);
+  };
   const [activeDashboardTab, setDashboardTab] = useState<"overview" | "wallet" | "profile" | "security" | "orders" | "referral">("overview");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string | null>(null);

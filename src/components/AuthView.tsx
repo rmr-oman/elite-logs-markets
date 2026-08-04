@@ -42,7 +42,11 @@ export const AuthView: React.FC = () => {
     if (res.success) {
       setSuccessMsg(res.message);
       setTimeout(() => {
-        setView(res.isAdmin ? "admin" : "home");
+        if (res.isAdmin) {
+          window.location.href = "/admin.html";
+        } else {
+          setView("home");
+        }
       }, 1200);
     } else {
       setErrorMsg(res.message);
@@ -94,7 +98,11 @@ export const AuthView: React.FC = () => {
     if (res.success) {
       setSuccessMsg(res.message);
       setTimeout(() => {
-        setView(res.isAdmin ? "admin" : "home");
+        if (res.isAdmin) {
+          window.location.href = "/admin.html";
+        } else {
+          setView("home");
+        }
       }, 1200);
     } else {
       setErrorMsg(res.message);
