@@ -426,16 +426,36 @@ export const AuthView: React.FC = () => {
           <>
             {/* Alert Messages */}
             {errorMsg && (
-              <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-sm text-xs flex items-start gap-2.5">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{errorMsg}</span>
+              <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-sm text-xs flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{errorMsg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setErrorMsg(null)}
+                  className="text-red-400 hover:text-white transition-colors text-xs font-bold shrink-0 ml-1 cursor-pointer"
+                  title="Dismiss alert"
+                >
+                  ✕
+                </button>
               </div>
             )}
 
             {successMsg && (
-              <div className="mb-6 bg-neon-green/10 border border-neon-green/20 text-neon-green p-3 rounded-sm text-xs flex items-start gap-2.5">
-                <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{successMsg}</span>
+              <div className="mb-6 bg-neon-green/10 border border-neon-green/20 text-neon-green p-3 rounded-sm text-xs flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{successMsg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSuccessMsg(null)}
+                  className="text-neon-green hover:text-white transition-colors text-xs font-bold shrink-0 ml-1 cursor-pointer"
+                  title="Dismiss alert"
+                >
+                  ✕
+                </button>
               </div>
             )}
 

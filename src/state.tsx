@@ -1223,10 +1223,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         }
         if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") {
-          return { success: false, message: "Google Sign-In popup was closed." };
+          return { success: false, message: "Google Sign-In was cancelled or closed. You can try again or register using Email & Password below." };
         }
         if (err.code === "auth/popup-blocked") {
-          return { success: false, message: "Popup was blocked by browser. Please allow popups for Google Sign-In." };
+          return { success: false, message: "Pop-up was blocked by your browser. Please allow popups or register using Email & Password below." };
         }
         return { success: false, message: err.message || "Google Authentication failed." };
       }
