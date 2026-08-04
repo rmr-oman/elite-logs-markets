@@ -1,0 +1,6 @@
+{
+  "name": "Elite Logs Market",
+  "description": "Premium Digital Product Marketplace for logs, virtual numbers, premium accounts, and VPNs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

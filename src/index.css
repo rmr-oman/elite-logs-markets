@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Poppins", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-cyber-bg: #0B0B0F;
+  --color-neon-blue: #00BFFF;
+  --color-neon-purple: #8A2BE2;
+  --color-neon-green: #00FFAA;
+}
+
+@layer base {
+  body {
+    background-color: #0B0B0F;
+    color: #ffffff;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+}
+
+/* Custom cyber-style scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0B0F;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F1F2E;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8A2BE2;
+}
+
+/* Neon glow classes */
+.neon-glow-blue {
+  box-shadow: 0 0 15px rgba(0, 191, 255, 0.35);
+}
+
+.neon-glow-purple {
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
+}
+
+.neon-glow-green {
+  box-shadow: 0 0 15px rgba(0, 255, 170, 0.3);
+}
+
+.neon-text-blue {
+  text-shadow: 0 0 10px rgba(0, 191, 255, 0.5);
+}
+
+.neon-text-purple {
+  text-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
+}
+
+.neon-text-green {
+  text-shadow: 0 0 10px rgba(0, 255, 170, 0.5);
+}
+
+.cyber-border {
+  border: 1px solid rgba(0, 191, 255, 0.2);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+}
+
+.gradient-purple {
+  background: linear-gradient(135deg, #8A2BE2 0%, #4B0082 100%);
+}
+
+.gradient-blue {
+  background: linear-gradient(135deg, #00BFFF 0%, #00008B 100%);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 191, 255, 0.15);
+}
+
+.glass-card:hover {
+  border: 1px solid rgba(138, 43, 226, 0.45);
+}
+
