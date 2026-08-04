@@ -2,12 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product, Order, Coupon, UserProfile, OrderStatus, PaymentMethod, PaymentGateway, TopUpRequest, RegisteredUser, ChatMessage, SupportSettings, FAQItem } from "./types";
 import { INITIAL_PRODUCTS, INITIAL_COUPONS, INITIAL_FAQS } from "./initialData";
 import { db, auth } from "./firebase";
+import { sendOTPEmail } from "./lib/brevo";
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signInWithPopup,
   GoogleAuthProvider,
   sendEmailVerification, 
+  sendPasswordResetEmail,
   signOut, 
   updateProfile,
   updatePassword
@@ -746,7 +748,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     email: string, 
     passwordVal: string, 
     referredBy?: string
-  ): Promise<{ success: boolean; message: string; email?: string; otpCode?: string }> => {
+  ): Promise<{ success: boolean; message: string; email?: string }> => {
     const cleanEmail = email.trim();
     const cleanEmailLower = cleanEmail.toLowerCase();
     const cleanUsername = username.trim();
@@ -756,7 +758,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: "Username cannot be empty!" };
     }
 
-    // Fetch latest user snapshot from Firestore for realtime duplicate check
+    if (!cleanEmail) {
+      return { success: false, message: "Email cannot be empty!" };
+    }
+
+    // Fetch latest user snapshot from Firestore for realtime duplicate username/email check
     let allUsers: RegisteredUser[] = [...registeredUsers];
     try {
       const usersSnap = await getDocs(collection(db, "registered_users"));
@@ -768,35 +774,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         allUsers = fetched;
       }
     } catch (e) {
-      console.warn("Could not fetch latest users for username validation snapshot:", e);
+      console.warn("Could not fetch latest users for validation snapshot:", e);
     }
 
-    // 1. Check if email is already registered in local state or Firestore
-    const existingEmail = allUsers.find(u => u.email && u.email.trim().toLowerCase() === cleanEmailLower);
+    // 1. Check if email is already registered
+    const existingEmail = allUsers.find(
+      u => u.email && u.email.trim().toLowerCase() === cleanEmailLower
+    );
     if (existingEmail) {
-      if (existingEmail.isVerified === false) {
-        // Unverified existing user - resend OTP and return requires verification
-        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        await setDoc(doc(db, "registered_users", cleanEmailLower), { otpCode: newOtp }, { merge: true });
-        
-        // Dispatch OTP Email via Brevo API / SMTP server endpoint
-        fetch("/api/send-otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: cleanEmail, username: existingEmail.username || cleanUsername, otpCode: newOtp }),
-        }).catch(err => console.warn("Brevo OTP email dispatch error:", err));
-
-        return { 
-          success: true, 
-          message: `Account created previously but not verified. A new 6-digit OTP code has been sent to ${cleanEmail}.`, 
-          email: cleanEmail, 
-          otpCode: newOtp 
-        };
-      }
       return { success: false, message: "This email address is already registered! Please log in instead." };
     }
 
-    // 2. Check if username is already taken (case-insensitive check across all users)
+    // 2. Check if username is already taken
     const existingUsername = allUsers.find(
       u => u.username && u.username.trim().toLowerCase() === cleanUsernameLower
     );
@@ -804,131 +793,139 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: `Username '${cleanUsername}' is already taken! Please choose a different username.` };
     }
 
-    // 3. Register user in Firebase Authentication
-    let firebaseUser = null;
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, passwordVal);
-      firebaseUser = userCredential.user;
+    // 3. Generate 6-digit OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      if (firebaseUser) {
-        await updateProfile(firebaseUser, { displayName: cleanUsername });
-        try {
-          await sendEmailVerification(firebaseUser);
-        } catch (e) {
-          console.warn("Firebase Auth email verification error:", e);
-        }
-      }
-    } catch (authErr: any) {
-      console.error("Firebase Auth Registration Error:", authErr);
-      if (authErr.code === "auth/email-already-in-use") {
-        // If already in Auth but unverified in DB, proceed to generate OTP
-      } else if (authErr.code === "auth/invalid-email") {
-        return { success: false, message: "Invalid email address format." };
-      } else if (authErr.code === "auth/weak-password") {
-        return { success: false, message: "Password is too weak. Please use at least 8 characters with numbers and symbols." };
-      }
+    // 4. Send OTP email via Brevo REST API
+    const sendRes = await sendOTPEmail(cleanEmail, otpCode);
+    if (!sendRes.success) {
+      return { success: false, message: sendRes.message };
     }
 
-    // 4. Generate 6-digit OTP Code
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 5. Store user profile in Firestore registered_users collection with isVerified: false
-    const newUser: RegisteredUser = {
+    // 5. Store OTP payload in sessionStorage with 5-minute expiration
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+    sessionStorage.setItem("reg_otp", JSON.stringify({
+      code: otpCode,
+      expiresAt,
       email: cleanEmail,
       username: cleanUsername,
-      passwordVal: passwordVal,
-      walletBalance: referredBy ? 10.00 : 0.00, // referral bonus
-      isAdmin: false,
-      referralCode: "ELITE-" + Math.floor(1000 + Math.random() * 9000) + "X",
-      isVerified: false, // OTP verification required before login!
-      otpCode: generatedOtp
-    };
-
-    await setDoc(doc(db, "registered_users", cleanEmailLower), newUser, { merge: true });
-
-    // Dispatch OTP Email via Brevo API / SMTP server endpoint
-    fetch("/api/send-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: cleanEmail, username: cleanUsername, otpCode: generatedOtp }),
-    }).catch(err => console.warn("Brevo OTP email dispatch error:", err));
-
-    // DO NOT set currentUser here! User must verify OTP first before logging in!
+      passwordVal,
+      referredBy
+    }));
 
     return { 
       success: true, 
-      message: `Your Elite Logs Market account verification OTP is sent to ${cleanEmail}. Please enter the code below to complete verification.`, 
-      email: cleanEmail,
-      otpCode: generatedOtp
+      message: `OTP verification code dispatched to ${cleanEmail}. Enter the code within 5 minutes to complete registration.`, 
+      email: cleanEmail
     };
   };
 
   const verifyUserOtp = async (email: string, enteredCode: string): Promise<{ success: boolean; message: string }> => {
+    const cleanInputCode = enteredCode.trim();
     const cleanEmailLower = email.trim().toLowerCase();
-    const userDocRef = doc(db, "registered_users", cleanEmailLower);
-    const userSnap = await getDoc(userDocRef);
 
-    let dbOtp = "";
-    if (userSnap.exists()) {
-      dbOtp = userSnap.data().otpCode || "";
-    } else {
-      const localUser = registeredUsers.find(u => u.email.toLowerCase() === cleanEmailLower);
-      if (localUser) dbOtp = localUser.otpCode || "";
+    const rawPayload = sessionStorage.getItem("reg_otp");
+    if (!rawPayload) {
+      return { success: false, message: "No active OTP registration session found. Please fill in the registration form again." };
     }
 
-    const cleanInputCode = enteredCode.trim();
+    let storedPayload: { code: string; expiresAt: number; email: string; username: string; passwordVal: string; referredBy?: string };
+    try {
+      storedPayload = JSON.parse(rawPayload);
+    } catch (e) {
+      return { success: false, message: "Invalid session data. Please register again." };
+    }
 
-    if (dbOtp && dbOtp === cleanInputCode) {
-      // Mark as verified
-      await setDoc(userDocRef, { isVerified: true, otpCode: "" }, { merge: true });
+    if (storedPayload.email.trim().toLowerCase() !== cleanEmailLower) {
+      return { success: false, message: "Email mismatch for active OTP session. Please register again." };
+    }
+
+    // Check expiration (5 minutes)
+    if (Date.now() > storedPayload.expiresAt) {
+      sessionStorage.removeItem("reg_otp");
+      return { success: false, message: "The OTP verification code has expired (exceeded 5 minutes)! Please request a new code." };
+    }
+
+    // Check OTP code match
+    if (cleanInputCode !== storedPayload.code) {
+      return { success: false, message: "Invalid 6-digit OTP code! Please check your email and try again." };
+    }
+
+    // OTP Verified successfully! Now create account in Firebase Auth & Firestore
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, storedPayload.email, storedPayload.passwordVal);
+      const firebaseUser = userCredential.user;
+
+      if (firebaseUser) {
+        await updateProfile(firebaseUser, { displayName: storedPayload.username });
+      }
+
+      const newUser: RegisteredUser = {
+        email: storedPayload.email,
+        username: storedPayload.username,
+        passwordVal: storedPayload.passwordVal,
+        walletBalance: storedPayload.referredBy ? 10.00 : 0.00,
+        isAdmin: false,
+        referralCode: "ELITE-" + Math.floor(1000 + Math.random() * 9000) + "X",
+        isVerified: true
+      };
+
+      await setDoc(doc(db, "registered_users", cleanEmailLower), newUser, { merge: true });
+
+      // Clear sessionStorage OTP
+      sessionStorage.removeItem("reg_otp");
+
+      // Automatically log in user
+      setCurrentUser({
+        username: storedPayload.username,
+        email: storedPayload.email,
+        walletBalance: newUser.walletBalance,
+        isAdmin: false,
+        isGuest: false,
+        referralCode: newUser.referralCode,
+        referredBy: storedPayload.referredBy
+      });
 
       return {
         success: true,
-        message: "Email OTP verified successfully! You can now log in to your account."
+        message: "OTP verified successfully! Account created and logged in."
       };
-    } else if (!dbOtp) {
-      return { success: false, message: "No active OTP request found for this email. Please request a new OTP." };
-    } else {
-      return { success: false, message: "Invalid 6-digit OTP code! Please check your email and try again." };
+    } catch (authErr: any) {
+      console.error("Firebase Auth Account Creation Error after OTP:", authErr);
+      if (authErr.code === "auth/email-already-in-use") {
+        return { success: false, message: "This email is already registered in Firebase Auth. Please log in." };
+      }
+      return { success: false, message: authErr.message || "Failed to create Firebase Auth account after OTP verification." };
     }
   };
 
-  const resendUserOtp = async (email: string): Promise<{ success: boolean; message: string; otpCode?: string }> => {
-    const cleanEmailLower = email.trim().toLowerCase();
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const resendUserOtp = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const rawPayload = sessionStorage.getItem("reg_otp");
+    if (!rawPayload) {
+      return { success: false, message: "No active registration session found. Please register again." };
+    }
 
-    await setDoc(doc(db, "registered_users", cleanEmailLower), { otpCode: newOtp }, { merge: true });
-
-    // Fetch user doc to get username for personalized email
-    let userUsername = email.split("@")[0];
+    let storedPayload: any;
     try {
-      const uSnap = await getDoc(doc(db, "registered_users", cleanEmailLower));
-      if (uSnap.exists() && uSnap.data().username) {
-        userUsername = uSnap.data().username;
-      }
+      storedPayload = JSON.parse(rawPayload);
     } catch (e) {
-      console.warn("Could not fetch username for OTP email:", e);
+      return { success: false, message: "Invalid registration session data." };
     }
 
-    // Dispatch OTP Email via Brevo API / SMTP server endpoint
-    fetch("/api/send-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, username: userUsername, otpCode: newOtp }),
-    }).catch(err => console.warn("Brevo OTP email dispatch error:", err));
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const sendRes = await sendOTPEmail(email, newOtp);
 
-    if (auth.currentUser) {
-      try {
-        await sendEmailVerification(auth.currentUser);
-      } catch (e) {
-        console.warn("Resend email verification note:", e);
-      }
+    if (!sendRes.success) {
+      return { success: false, message: sendRes.message };
     }
+
+    storedPayload.code = newOtp;
+    storedPayload.expiresAt = Date.now() + 5 * 60 * 1000; // Reset 5 min timer
+    sessionStorage.setItem("reg_otp", JSON.stringify(storedPayload));
 
     return {
       success: true,
-      message: `Your Elite Logs Market account verification OTP is sent to ${email}.`,
-      otpCode: newOtp
+      message: `A new 6-digit OTP code has been sent to ${email}. Code expires in 5 minutes.`
     };
   };
 
@@ -942,117 +939,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: "Please enter your registered Email or Username." };
     }
 
-    let foundUserDoc: RegisteredUser | null = null;
-    let foundDocRef: ReturnType<typeof doc> | null = null;
-
-    // Check local registeredUsers state first
-    const localMatch = registeredUsers.find(
-      u => (u.email && u.email.trim().toLowerCase() === cleanInputLower) ||
-           (u.username && u.username.trim().toLowerCase() === cleanInputLower)
-    );
-    if (localMatch) {
-      foundUserDoc = localMatch;
-      foundDocRef = doc(db, "registered_users", localMatch.email.trim().toLowerCase());
-    }
-
-    // Check Firestore registered_users collection
-    try {
-      if (cleanInput.includes("@")) {
-        const dSnap = await getDoc(doc(db, "registered_users", cleanInputLower));
-        if (dSnap.exists()) {
-          foundUserDoc = dSnap.data() as RegisteredUser;
-          foundDocRef = dSnap.ref;
+    let targetEmail = cleanInput;
+    if (!cleanInput.includes("@")) {
+      // Lookup email by username
+      const localMatch = registeredUsers.find(
+        u => u.username && u.username.trim().toLowerCase() === cleanInputLower
+      );
+      if (localMatch && localMatch.email) {
+        targetEmail = localMatch.email;
+      } else {
+        try {
+          const snap = await getDocs(collection(db, "registered_users"));
+          snap.forEach(d => {
+            const data = d.data() as RegisteredUser;
+            if (data.username && data.username.trim().toLowerCase() === cleanInputLower && data.email) {
+              targetEmail = data.email;
+            }
+          });
+        } catch (e) {
+          console.warn("Firestore user lookup error during password reset:", e);
         }
       }
-      if (!foundUserDoc) {
-        const snap = await getDocs(collection(db, "registered_users"));
-        snap.forEach(d => {
-          const data = d.data() as RegisteredUser;
-          if (
-            (data.email && data.email.trim().toLowerCase() === cleanInputLower) ||
-            (data.username && data.username.trim().toLowerCase() === cleanInputLower)
-          ) {
-            foundUserDoc = data;
-            foundDocRef = d.ref;
-          }
-        });
-      }
-    } catch (e) {
-      console.warn("Error finding user for password reset:", e);
     }
 
-    if (!foundUserDoc) {
-      return { success: false, message: "No registered account found with this Email or Username!" };
-    }
-
-    const targetEmail = foundUserDoc.email.trim();
-    const targetUsername = foundUserDoc.username || targetEmail.split("@")[0];
-    const newResetOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Store reset OTP in Firestore
-    const userDocRef = doc(db, "registered_users", targetEmail.toLowerCase());
-    await setDoc(userDocRef, { resetOtpCode: newResetOtp, otpCode: newResetOtp }, { merge: true });
-
-    // Send email via Brevo API endpoint
-    fetch("/api/send-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      await sendPasswordResetEmail(auth, targetEmail);
+      return {
+        success: true,
         email: targetEmail,
-        username: targetUsername,
-        otpCode: newResetOtp,
-        isPasswordReset: true
-      }),
-    }).catch(err => console.warn("Password reset OTP email dispatch error:", err));
-
-    return {
-      success: true,
-      email: targetEmail,
-      message: `A 6-digit password reset OTP code has been dispatched to ${targetEmail}.`
-    };
+        message: "Password reset link sent to your email. Please check your inbox or spam folder to complete registration."
+      };
+    } catch (err: any) {
+      console.error("Firebase Auth Password Reset Error:", err);
+      if (err.code === "auth/user-not-found") {
+        return { success: false, message: "No registered account found with this email address." };
+      } else if (err.code === "auth/invalid-email") {
+        return { success: false, message: "Invalid email address format." };
+      }
+      return { success: false, message: err.message || "Failed to send password reset email." };
+    }
   };
 
   const verifyResetOtp = async (
-    email: string,
-    otpCode: string
+    _email: string,
+    _otpCode: string
   ): Promise<{ success: boolean; message: string }> => {
-    const cleanEmailLower = email.trim().toLowerCase();
-    const cleanCode = otpCode.trim();
-
-    if (!cleanEmailLower || !cleanCode) {
-      return { success: false, message: "Please enter the 6-digit OTP code." };
-    }
-
-    const userDocRef = doc(db, "registered_users", cleanEmailLower);
-    const userSnap = await getDoc(userDocRef);
-
-    let storedOtp = "";
-    if (userSnap.exists()) {
-      storedOtp = userSnap.data().resetOtpCode || userSnap.data().otpCode || "";
-    } else {
-      const localUser = registeredUsers.find(u => u.email.toLowerCase() === cleanEmailLower);
-      if (localUser) storedOtp = localUser.otpCode || "";
-    }
-
-    if (storedOtp && storedOtp === cleanCode) {
-      return { success: true, message: "OTP verified successfully!" };
-    } else if (!storedOtp) {
-      return { success: false, message: "No active password reset code found for this email. Please request a new OTP code." };
-    } else {
-      return { success: false, message: "Invalid 6-digit OTP code! Please check your email and try again." };
-    }
+    return { success: true, message: "Reset link processed." };
   };
 
   const resetPasswordWithOtp = async (
     email: string,
-    otpCode: string,
+    _otpCode: string,
     newPassword: string
   ): Promise<{ success: boolean; message: string }> => {
     const cleanEmailLower = email.trim().toLowerCase();
-    const cleanCode = otpCode.trim();
     const cleanPassword = newPassword;
 
-    if (!cleanEmailLower || !cleanCode || !cleanPassword) {
+    if (!cleanEmailLower || !cleanPassword) {
       return { success: false, message: "Please fill in all required fields." };
     }
 
@@ -1061,43 +1004,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const userDocRef = doc(db, "registered_users", cleanEmailLower);
-    const userSnap = await getDoc(userDocRef);
+    await setDoc(userDocRef, {
+      passwordVal: cleanPassword,
+      isVerified: true
+    }, { merge: true });
 
-    let storedOtp = "";
-    if (userSnap.exists()) {
-      storedOtp = userSnap.data().resetOtpCode || userSnap.data().otpCode || "";
-    } else {
-      const localUser = registeredUsers.find(u => u.email.toLowerCase() === cleanEmailLower);
-      if (localUser) storedOtp = localUser.otpCode || "";
-    }
-
-    if (storedOtp && storedOtp === cleanCode) {
-      // Update password in Firestore and clear OTP
-      await setDoc(userDocRef, {
-        passwordVal: cleanPassword,
-        resetOtpCode: "",
-        otpCode: "",
-        isVerified: true
-      }, { merge: true });
-
-      // Update Firebase Auth password if active or sync user
-      if (auth.currentUser && auth.currentUser.email?.toLowerCase() === cleanEmailLower) {
-        try {
-          await updatePassword(auth.currentUser, cleanPassword);
-        } catch (e) {
-          console.warn("Firebase Auth updatePassword warning:", e);
-        }
+    if (auth.currentUser && auth.currentUser.email?.toLowerCase() === cleanEmailLower) {
+      try {
+        await updatePassword(auth.currentUser, cleanPassword);
+      } catch (e) {
+        console.warn("Firebase Auth updatePassword warning:", e);
       }
-
-      return {
-        success: true,
-        message: "Your password has been updated successfully! Please log in with your new password."
-      };
-    } else if (!storedOtp) {
-      return { success: false, message: "No active password reset code found for this email. Please request a new OTP." };
-    } else {
-      return { success: false, message: "Invalid 6-digit OTP code! Please check your email and try again." };
     }
+
+    return {
+      success: true,
+      message: "Your password has been updated successfully! Please log in with your new password."
+    };
   };
 
   const loginUser = async (
@@ -1190,26 +1113,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await setDoc(foundDocRef, { passwordVal: cleanPassword }, { merge: true });
     }
 
-    // 3. Check OTP Verification status from live Firestore user doc
-    if (foundUserDoc.isVerified === false) {
-      const otpCode = foundUserDoc.otpCode || Math.floor(100000 + Math.random() * 900000).toString();
-      if (foundDocRef && !foundUserDoc.otpCode) {
-        await setDoc(foundDocRef, { otpCode }, { merge: true });
-      }
-
-      // Re-dispatch OTP via Brevo API
-      fetch("/api/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail, username: foundUserDoc.username || targetEmail.split("@")[0], otpCode }),
-      }).catch(err => console.warn("Brevo OTP email dispatch error:", err));
-
-      return {
-        success: false,
-        requiresOtp: true,
-        email: targetEmail,
-        message: `Your account is registered but not verified yet! A 6-digit OTP code has been sent to ${targetEmail}.`
-      };
+    // Ensure user record is marked verified upon successful credential authentication
+    if (foundDocRef && foundUserDoc.isVerified === false) {
+      await setDoc(foundDocRef, { isVerified: true }, { merge: true });
     }
 
     // 4. Set session user

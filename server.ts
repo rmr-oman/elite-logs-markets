@@ -11,110 +11,68 @@ async function startServer() {
 
   app.use(express.json());
 
-  // API endpoint to dispatch OTP email via Brevo SMTP / API
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  // API endpoint to dispatch Brevo OTP email
   app.post("/api/send-otp", async (req, res) => {
     try {
-      const { email, username, otpCode, isPasswordReset } = req.body;
-
-      if (!email || !otpCode) {
+      const { userEmail, otpCode } = req.body;
+      if (!userEmail || !otpCode) {
         return res.status(400).json({ success: false, message: "Email and OTP code are required." });
       }
 
-      const brevoApiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
-      const senderEmail = process.env.BREVO_SENDER_EMAIL || "noreply@elitelogs.net";
-      const senderName = process.env.BREVO_SENDER_NAME || "Elite Logs Market";
+      const BREVO_API_KEY = process.env.BREVO_API_KEY;
+      const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "rahatislamroman@gmail.com";
+      const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "Elite Logs Market";
 
-      if (!brevoApiKey) {
-        console.warn("⚠️ BREVO_API_KEY is missing from environment. Set BREVO_API_KEY in secrets for live emails.");
-        return res.json({
-          success: true,
-          delivered: false,
-          message: "OTP code generated! To deliver live emails to users, set BREVO_API_KEY in AI Studio Secrets.",
-          otpCode: otpCode
+      if (!BREVO_API_KEY) {
+        return res.status(500).json({
+          success: false,
+          message: "BREVO_API_KEY environment variable is missing. Please set BREVO_API_KEY in your .env file or AI Studio secrets."
         });
       }
 
-      const emailSubject = isPasswordReset 
-        ? `🔑 ${otpCode} - Password Reset Verification Code | Elite Logs Market`
-        : `🔑 ${otpCode} - Elite Logs Market Email Verification Code`;
-
-      const emailHeader = isPasswordReset ? "PASSWORD RESET REQUEST" : "SECURE ACCOUNT VERIFICATION";
-      const emailBodyText = isPasswordReset
-        ? "We received a request to reset the password for your Elite Logs Market account. Please enter the One-Time OTP code below to verify your identity and set a new password:"
-        : "Your registration at Elite Logs Market requires email confirmation. Please enter the One-Time Verification OTP code below to activate your account:";
-
-      // Call Brevo (Sendinblue) Transactional Email API v3
-      const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
           "accept": "application/json",
-          "api-key": brevoApiKey,
+          "api-key": BREVO_API_KEY,
           "content-type": "application/json",
         },
         body: JSON.stringify({
           sender: {
-            name: senderName,
-            email: senderEmail,
+            name: BREVO_SENDER_NAME,
+            email: BREVO_SENDER_EMAIL
           },
           to: [
             {
-              email: email,
-              name: username || email.split("@")[0],
-            },
+              email: userEmail
+            }
           ],
-          subject: emailSubject,
-          htmlContent: `
-            <div style="font-family: 'Segoe UI', Arial, sans-serif; background-color: #0b0b0f; color: #ffffff; padding: 32px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid rgba(212, 175, 55, 0.3); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-              <div style="text-align: center; margin-bottom: 24px;">
-                <h1 style="color: #FFD700; font-size: 26px; font-weight: 900; margin: 0; text-transform: uppercase; letter-spacing: 2px;">ELITE LOGS MARKET</h1>
-                <p style="color: #a0a0ab; font-size: 13px; margin-top: 6px; text-transform: uppercase; letter-spacing: 1px;">${emailHeader}</p>
-              </div>
-              
-              <div style="background-color: rgba(255,255,255,0.03); border-radius: 8px; padding: 20px; border-left: 3px solid #D4AF37; margin-bottom: 24px;">
-                <p style="font-size: 15px; color: #e4e4e7; margin: 0 0 10px 0;">Hello <strong style="color: #FFD700;">${username || email.split("@")[0]}</strong>,</p>
-                <p style="font-size: 14px; color: #a1a1aa; line-height: 1.6; margin: 0;">${emailBodyText}</p>
-              </div>
-
-              <div style="text-align: center; margin: 30px 0;">
-                <div style="display: inline-block; background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(255,215,0,0.05)); border: 2px solid #D4AF37; padding: 16px 40px; border-radius: 10px; font-size: 36px; font-weight: 900; letter-spacing: 10px; color: #FFD700; text-shadow: 0 0 12px rgba(255,215,0,0.5); box-shadow: 0 0 25px rgba(212, 175, 55, 0.25);">
-                  ${otpCode}
-                </div>
-                <p style="color: #71717a; font-size: 12px; margin-top: 12px;">This code expires shortly. Do not share this OTP with anyone.</p>
-              </div>
-
-              <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 24px 0;" />
-              <p style="font-size: 11px; color: #52525b; text-align: center; margin: 0;">&copy; ${new Date().getFullYear()} Elite Logs Market. Powered by Firebase Auth & Brevo SMTP API.</p>
-            </div>
-          `,
-        }),
+          subject: "Your Registration OTP - Elite Logs Market",
+          htmlContent: `<div style='font-family: Arial, sans-serif; padding: 20px; background-color: #121212; color: #ffffff; border-radius: 8px;'><h2 style='color: #00e5ff;'>Elite Logs Market</h2><p>Your verification code for registration is:</p><h1 style='color: #7c4dff; letter-spacing: 6px; font-size: 32px;'>${otpCode}</h1><p style='color: #aaaaaa;'>This code will expire in 5 minutes. Do not share it with anyone.</p></div>`
+        })
       });
 
-      if (!brevoRes.ok) {
-        const errorData = await brevoRes.json().catch(() => ({}));
-        console.error("Brevo API Response Error:", errorData);
-        return res.status(500).json({
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        return res.status(response.status).json({
           success: false,
-          message: errorData.message || "Failed to send email via Brevo SMTP API.",
+          message: errData.message || `Brevo API error (${response.status})`
         });
       }
 
-      const responseData = await brevoRes.json();
       return res.json({
         success: true,
-        delivered: true,
-        message: `OTP verification email dispatched to ${email} via Brevo SMTP!`,
-        messageId: responseData.messageId
+        message: "OTP verification code dispatched to your email!"
       });
-
     } catch (err: any) {
-      console.error("Server OTP Dispatch Error:", err);
-      return res.status(500).json({ success: false, message: err.message || "Server error while processing OTP email." });
+      console.error("Server Brevo OTP dispatch error:", err);
+      return res.status(500).json({ success: false, message: err.message || "Failed to send OTP email." });
     }
-  });
-
-  // Health check endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
   });
 
   // Vite middleware for development
@@ -138,3 +96,4 @@ async function startServer() {
 }
 
 startServer();
+

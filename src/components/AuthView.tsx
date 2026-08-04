@@ -139,12 +139,27 @@ export const AuthView: React.FC = () => {
     setIsLoading(false);
 
     if (res.success) {
-      // Registration complete - navigate to OTP verification mode!
+      // Registration complete - navigate to verification notice mode
       setOtpEmail(res.email || email.trim());
       setIsOtpMode(true);
       setOtpSuccess(res.message);
     } else {
       setErrorMsg(res.message);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setIsOtpVerifying(true);
+    setOtpError(null);
+    setOtpSuccess(null);
+
+    const res = await resendUserOtp(otpEmail);
+    setIsOtpVerifying(false);
+
+    if (res.success) {
+      setOtpSuccess(res.message);
+    } else {
+      setOtpError(res.message);
     }
   };
 
@@ -166,25 +181,8 @@ export const AuthView: React.FC = () => {
       setOtpSuccess(res.message);
       setTimeout(() => {
         setIsOtpMode(false);
-        setMode("login");
-        setSuccessMsg("OTP Verified! Please enter your credentials to log in.");
-        setOtpInput("");
+        setView("home");
       }, 1500);
-    } else {
-      setOtpError(res.message);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    setIsOtpVerifying(true);
-    setOtpError(null);
-    setOtpSuccess(null);
-
-    const res = await resendUserOtp(otpEmail);
-    setIsOtpVerifying(false);
-
-    if (res.success) {
-      setOtpSuccess(res.message);
     } else {
       setOtpError(res.message);
     }
@@ -335,7 +333,7 @@ export const AuthView: React.FC = () => {
           </p>
         </div>
 
-        {/* OTP VERIFICATION VIEW */}
+        {/* EMAIL VERIFICATION OTP VIEW */}
         {isOtpMode ? (
           <div className="space-y-5 font-mono">
             {otpError && (
@@ -352,19 +350,19 @@ export const AuthView: React.FC = () => {
               </div>
             )}
 
-            {/* Email OTP Notification Banner */}
-            <div className="p-3.5 bg-neon-blue/10 border border-neon-blue/30 rounded-sm space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-bold text-neon-blue">
+            {/* Email OTP Banner */}
+            <div className="p-4 bg-neon-blue/10 border border-neon-blue/30 rounded-sm space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-neon-blue">
                 <span className="flex items-center gap-1.5">
-                  <Mail className="h-3.5 w-3.5" />
+                  <Mail className="h-4 w-4" />
                   <span>EMAIL OTP DISPATCHED</span>
                 </span>
-                <span className="text-[9px] uppercase tracking-wider bg-neon-blue/20 px-1.5 py-0.5 rounded">
-                  Inbox Notification
+                <span className="text-[9px] uppercase tracking-wider bg-neon-blue/20 px-2 py-0.5 rounded font-mono">
+                  Brevo REST API
                 </span>
               </div>
-              <p className="text-[11px] text-white/80 leading-relaxed font-sans">
-                Your Elite Logs Market account verification OTP has been sent to <strong className="text-white">{otpEmail}</strong>. Please check your inbox or spam folder.
+              <p className="text-xs text-white/90 leading-relaxed font-sans">
+                A 6-digit registration OTP code has been sent to <strong className="text-white">{otpEmail}</strong>. Code expires in 5 minutes.
               </p>
             </div>
 
@@ -394,7 +392,7 @@ export const AuthView: React.FC = () => {
                 disabled={isOtpVerifying || otpInput.length < 6}
                 className="w-full py-2.5 bg-neon-green hover:bg-neon-green/90 text-black font-black uppercase text-xs tracking-widest rounded-sm transition-all shadow-md cursor-pointer select-none active:scale-[0.99] disabled:opacity-50"
               >
-                {isOtpVerifying ? "Verifying OTP..." : "VERIFY OTP & COMPLETE REGISTRATION"}
+                {isOtpVerifying ? "VERIFYING OTP..." : "VERIFY OTP & COMPLETE REGISTRATION"}
               </button>
             </form>
 
@@ -403,9 +401,9 @@ export const AuthView: React.FC = () => {
                 type="button"
                 onClick={handleResendOtp}
                 disabled={isOtpVerifying}
-                className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-neon-blue/20 hover:bg-neon-blue/30 border border-neon-blue/40 text-neon-blue hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <RefreshCw className={`h-3 w-3 ${isOtpVerifying ? "animate-spin text-neon-blue" : ""}`} />
+                <RefreshCw className={`h-3.5 w-3.5 ${isOtpVerifying ? "animate-spin" : ""}`} />
                 <span>Resend OTP Code to Email</span>
               </button>
 
@@ -413,13 +411,14 @@ export const AuthView: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setIsOtpMode(false);
-                  setMode("login");
+                  setMode("register");
                   setOtpError(null);
                   setOtpSuccess(null);
+                  setOtpInput("");
                 }}
-                className="text-[10px] text-white/40 hover:text-white transition-colors"
+                className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer"
               >
-                ← Back to Login Screen
+                ← Back to Registration
               </button>
             </div>
           </div>
@@ -528,85 +527,48 @@ export const AuthView: React.FC = () => {
                   </div>
                 </form>
               ) : resetStep === 2 ? (
-                /* STEP 2: Enter & Verify OTP Code ONLY */
-                <form onSubmit={handleVerifyResetOtp} className="space-y-4 font-mono">
-                  <div className="p-3.5 bg-neon-blue/10 border border-neon-blue/30 rounded-sm space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-neon-blue">
+                /* STEP 2: Password Reset Link Sent Notice */
+                <div className="space-y-4 font-mono">
+                  <div className="p-4 bg-neon-blue/10 border border-neon-blue/30 rounded-sm space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-neon-blue">
                       <span className="flex items-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5" />
-                        <span>RESET OTP DISPATCHED</span>
+                        <Mail className="h-4 w-4" />
+                        <span>RESET LINK SENT</span>
+                      </span>
+                      <span className="text-[9px] uppercase tracking-wider bg-neon-blue/20 px-2 py-0.5 rounded font-mono">
+                        Firebase Native Auth
                       </span>
                     </div>
-                    <p className="text-[11px] text-white/80 font-sans">
-                      A 6-digit password reset OTP code has been sent to <strong className="text-white">{resetTargetEmail}</strong>. Please check your inbox.
+                    <p className="text-xs text-white/90 leading-relaxed font-sans">
+                      Password reset link sent to your email (<strong className="text-white">{resetTargetEmail}</strong>). Please check your inbox or spam folder to reset your password.
                     </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] uppercase font-bold text-white/60 tracking-wider">
-                      ENTER 6-DIGIT RESET CODE
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-white/30">
-                        <Key className="h-4 w-4" />
-                      </span>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={resetOtpInput}
-                        onChange={(e) => setResetOtpInput(e.target.value.replace(/\D/g, ""))}
-                        placeholder="123456"
-                        className="w-full bg-black/40 border border-white/10 rounded-sm focus:border-neon-blue focus:outline-none py-2.5 pl-9 pr-3 text-sm font-mono text-white text-center tracking-[0.3em] font-bold"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isResetLoading || resetOtpInput.length < 6}
-                    className="w-full py-2.5 bg-neon-blue hover:bg-neon-blue/90 text-black font-black uppercase text-xs tracking-widest rounded-sm transition-all shadow-md cursor-pointer select-none active:scale-[0.99] disabled:opacity-50"
-                  >
-                    {isResetLoading ? "Verifying OTP..." : "VERIFY OTP CODE"}
-                  </button>
-
-                  <div className="pt-2 border-t border-white/10 flex flex-col gap-2 text-center">
+                  <div className="pt-2 border-t border-white/10 flex flex-col gap-2.5 text-center">
                     <button
                       type="button"
                       onClick={handleResendResetOtp}
                       disabled={isResetLoading}
-                      className="w-full py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-neon-blue/20 hover:bg-neon-blue/30 border border-neon-blue/40 text-neon-blue hover:text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <RefreshCw className={`h-3 w-3 ${isResetLoading ? "animate-spin text-neon-blue" : ""}`} />
-                      <span>Resend Reset OTP</span>
+                      <RefreshCw className={`h-3.5 w-3.5 ${isResetLoading ? "animate-spin" : ""}`} />
+                      <span>Resend Password Reset Link</span>
                     </button>
 
-                    <div className="flex items-center justify-between text-[10px] text-white/40 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setResetStep(1);
-                          setErrorMsg(null);
-                          setSuccessMsg(null);
-                        }}
-                        className="hover:text-white transition-colors cursor-pointer"
-                      >
-                        ← Re-enter Email
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMode("login");
-                          setErrorMsg(null);
-                          setSuccessMsg(null);
-                        }}
-                        className="hover:text-white transition-colors cursor-pointer"
-                      >
-                        Back to Login
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("login");
+                        setResetStep(1);
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-all cursor-pointer"
+                    >
+                      Back to Login Screen
+                    </button>
                   </div>
-                </form>
+                </div>
               ) : (
                 /* STEP 3: Enter New Password & Confirm Password */
                 <form onSubmit={handleResetPasswordSubmit} className="space-y-4 font-mono">
