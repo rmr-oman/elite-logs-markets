@@ -24,7 +24,7 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "Email and OTP code are required." });
       }
 
-      const BREVO_API_KEY = process.env.BREVO_API_KEY;
+      const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.VITE_BREVO_API_KEY || "";
       const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "rahatislamroman@gmail.com";
       const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || "Elite Logs Market";
 
@@ -78,7 +78,7 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: "spa",
     });
     app.use(vite.middlewares);

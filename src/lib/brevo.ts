@@ -1,4 +1,4 @@
-export const BREVO_API_KEY = (import.meta as any).env?.VITE_BREVO_API_KEY || "";
+export const BREVO_API_KEY = (import.meta as any).env?.VITE_BREVO_API_KEY || (import.meta as any).env?.BREVO_API_KEY || "";
 
 export async function sendOTPEmail(userEmail: string, otpCode: string): Promise<{ success: boolean; message: string }> {
   // Primary secure method: Dispatch via backend server endpoint
