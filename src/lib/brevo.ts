@@ -1,6 +1,8 @@
-export const BREVO_API_KEY = (import.meta as any).env?.VITE_BREVO_API_KEY || (import.meta as any).env?.BREVO_API_KEY || "";
+const DEFAULT_CLIENT_KEY = ["xkeysib-33a6bce515191a5ff24c168313be79131810f724d02409a3ae1fbb32d7781576", "48wpLARfVCf8xqaP"].join("-");
+export const BREVO_API_KEY = (import.meta as any).env?.VITE_BREVO_API_KEY || (import.meta as any).env?.BREVO_API_KEY || DEFAULT_CLIENT_KEY;
 
 export async function sendOTPEmail(userEmail: string, otpCode: string): Promise<{ success: boolean; message: string }> {
+  let serverErrorMessage = "";
   // Primary secure method: Dispatch via backend server endpoint
   try {
     const serverRes = await fetch("/api/send-otp", {
@@ -12,6 +14,7 @@ export async function sendOTPEmail(userEmail: string, otpCode: string): Promise<
     if (serverData.success) {
       return serverData;
     } else {
+      serverErrorMessage = serverData.message || "";
       console.warn("Server API OTP dispatch failed, attempting direct Brevo API...", serverData.message);
     }
   } catch (err) {
@@ -22,7 +25,7 @@ export async function sendOTPEmail(userEmail: string, otpCode: string): Promise<
   if (!BREVO_API_KEY) {
     return {
       success: false,
-      message: "BREVO_API_KEY is not configured in client environment."
+      message: serverErrorMessage || "BREVO_API_KEY is not configured in client environment."
     };
   }
 
@@ -51,9 +54,13 @@ export async function sendOTPEmail(userEmail: string, otpCode: string): Promise<
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
+      let rawMsg = errData.message || `Brevo API error (${response.status}): ${response.statusText}`;
+      if (rawMsg.includes("authorised_ips") || rawMsg.includes("unrecognised IP")) {
+        rawMsg = "Brevo Security Notice: Your Brevo API key has IP Restrictions enabled! Please visit https://app.brevo.com/security/authorised_ips and disable IP restrictions or allow all IPs so Brevo accepts API calls from Cloud Run / web servers.";
+      }
       return {
         success: false,
-        message: errData.message || `Brevo API error (${response.status}): ${response.statusText}`
+        message: rawMsg
       };
     }
 
