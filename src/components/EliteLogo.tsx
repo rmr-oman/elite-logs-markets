@@ -17,11 +17,17 @@ export const EliteLogo: React.FC<EliteLogoProps> = ({
     <div className={`relative rounded-full border-2 border-[#D4AF37]/60 p-0.5 bg-[#0B0B0F] shadow-[0_0_15px_rgba(212,175,55,0.35)] overflow-hidden shrink-0 flex items-center justify-center ${className}`}>
       {!hasError ? (
         <img
-          src={logoImg || "/logo.png"}
+          src="/logo.png"
           alt="Elite Logs Market Logo"
           className={imgClassName}
           referrerPolicy="no-referrer"
-          onError={() => setHasError(true)}
+          onError={(e) => {
+            if (logoImg && (e.currentTarget as HTMLImageElement).src !== logoImg) {
+              (e.currentTarget as HTMLImageElement).src = logoImg;
+            } else {
+              setHasError(true);
+            }
+          }}
         />
       ) : (
         <div className="w-full h-full rounded-full bg-gradient-to-br from-[#12121A] to-[#0A0A0E] flex items-center justify-center text-[#D4AF37]">
