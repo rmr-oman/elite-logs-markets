@@ -12,7 +12,10 @@ import {
   sendPasswordResetEmail,
   signOut, 
   updateProfile,
-  updatePassword
+  updatePassword,
+  setPersistence,
+  browserSessionPersistence,
+  onAuthStateChanged
 } from "firebase/auth";
 import { 
   collection, 
@@ -124,13 +127,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orders, setOrders] = useState<Order[]>([]);
   const [coupons] = useState<Coupon[]>(INITIAL_COUPONS);
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
-    const local = localStorage.getItem("elite_logs_user");
-    if (local) {
+    // Verify active browser session flag. If browser was closed, session expires.
+    const isSessionActive = sessionStorage.getItem("elite_active_browser_session") === "true";
+    if (!isSessionActive) {
+      localStorage.removeItem("elite_logs_user");
+      sessionStorage.removeItem("elite_logs_user");
+      // Fire-and-forget sign out to flush cached auth token
+      signOut(auth).catch(() => {});
+      return {
+        email: "",
+        username: "Guest",
+        walletBalance: 0.00,
+        isAdmin: false,
+        referralCode: "",
+        isGuest: true
+      };
+    }
+
+    const cached = sessionStorage.getItem("elite_logs_user") || localStorage.getItem("elite_logs_user");
+    if (cached) {
       try {
-        const parsed = JSON.parse(local);
+        const parsed = JSON.parse(cached);
         if (parsed && typeof parsed === "object") return parsed;
       } catch (e) {
-        console.warn("Invalid cached user in localStorage:", e);
+        console.warn("Invalid cached user in storage:", e);
       }
     }
     return {
@@ -401,9 +421,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser?.email, currentUser?.isGuest]);
 
-  // Sync currentUser changes to localStorage
+  // Enforce session persistence via Firebase Auth listener
   useEffect(() => {
-    localStorage.setItem("elite_logs_user", JSON.stringify(currentUser));
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const isSessionActive = sessionStorage.getItem("elite_active_browser_session") === "true";
+      if (!isSessionActive && firebaseUser) {
+        // Fresh browser session without active flag -> expire and sign out immediately
+        await signOut(auth);
+        localStorage.removeItem("elite_logs_user");
+        sessionStorage.removeItem("elite_logs_user");
+        setCurrentUser({
+          email: "",
+          username: "Guest",
+          walletBalance: 0.00,
+          isAdmin: false,
+          referralCode: "",
+          isGuest: true
+        });
+        return;
+      }
+
+      if (firebaseUser) {
+        sessionStorage.setItem("elite_active_browser_session", "true");
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Sync currentUser changes to sessionStorage and localStorage
+  useEffect(() => {
+    if (!currentUser.isGuest) {
+      sessionStorage.setItem("elite_active_browser_session", "true");
+      sessionStorage.setItem("elite_logs_user", JSON.stringify(currentUser));
+      localStorage.setItem("elite_logs_user", JSON.stringify(currentUser));
+    } else {
+      sessionStorage.removeItem("elite_logs_user");
+      localStorage.removeItem("elite_logs_user");
+    }
   }, [currentUser]);
 
   // Sync cart to localStorage
@@ -851,8 +906,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: "Invalid 6-digit OTP code! Please check your email and try again." };
     }
 
-    // OTP Verified successfully! Now create account in Firebase Auth & Firestore
+    // OTP Verified successfully! Now create account in Firebase Auth & Firestore with browserSessionPersistence
     try {
+      await setPersistence(auth, browserSessionPersistence);
       const userCredential = await createUserWithEmailAndPassword(auth, storedPayload.email, storedPayload.passwordVal);
       const firebaseUser = userCredential.user;
 
@@ -875,7 +931,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Clear sessionStorage OTP
       sessionStorage.removeItem("reg_otp");
 
-      // Automatically log in user
+      // Mark session as active and automatically log in user
+      sessionStorage.setItem("elite_active_browser_session", "true");
       setCurrentUser({
         username: storedPayload.username,
         email: storedPayload.email,
@@ -1086,6 +1143,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Password Authentication Check
     let authSuccess = false;
 
+    // Configure session persistence prior to sign in
+    try {
+      await setPersistence(auth, browserSessionPersistence);
+    } catch (e) {
+      console.warn("Error setting browserSessionPersistence during email login:", e);
+    }
+
     // Try Firebase Auth sign in
     try {
       await signInWithEmailAndPassword(auth, targetEmail, cleanPassword);
@@ -1143,6 +1207,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const executeGoogleSignIn = async (isRetry = false): Promise<{ success: boolean; message: string; isAdmin?: boolean }> => {
       const startTime = Date.now();
       try {
+        try {
+          await setPersistence(auth, browserSessionPersistence);
+        } catch (e) {
+          console.warn("Error setting browserSessionPersistence for Google login:", e);
+        }
+
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         const result = await signInWithPopup(auth, provider);
@@ -1254,6 +1324,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn("Sign out error:", err);
     }
+    sessionStorage.removeItem("elite_active_browser_session");
+    sessionStorage.removeItem("elite_logs_user");
     localStorage.removeItem("elite_logs_user");
     setCurrentUser({
       email: "",

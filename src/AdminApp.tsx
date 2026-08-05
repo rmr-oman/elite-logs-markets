@@ -20,8 +20,9 @@ export default function AdminApp() {
       if (!isSubscribed) return;
 
       if (!firebaseUser) {
-        // Fallback: Check local state currentUser if logged in without Firebase session (e.g. mock/local auth)
-        const localUserStr = localStorage.getItem("elite_logs_user");
+        // Fallback: Check local state currentUser if logged in without Firebase session, provided active session exists
+        const isSessionActive = sessionStorage.getItem("elite_active_browser_session") === "true";
+        const localUserStr = isSessionActive ? (sessionStorage.getItem("elite_logs_user") || localStorage.getItem("elite_logs_user")) : null;
         let isLocalAdmin = false;
         if (localUserStr) {
           try {

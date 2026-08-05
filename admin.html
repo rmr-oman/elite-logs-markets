@@ -6,6 +6,10 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>Elite Logs | Master Admin Panel</title>
     <script>
+      // Enforce session expiration on browser close
+      if (!sessionStorage.getItem('elite_active_browser_session')) {
+        localStorage.removeItem('elite_logs_user');
+      }
       window.addEventListener('unhandledrejection', function(event) {
         var str = String(event.reason || '');
         if (str.includes('WebSocket') || (event.reason && event.reason.message && event.reason.message.includes('WebSocket'))) {
