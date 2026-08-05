@@ -4,7 +4,7 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/((?!assets/|logo.png|favicon.ico|admin.html|api/).*)",
+      "source": "/((?!.*\\.).*)",
       "destination": "/index.html"
     }
   ]
